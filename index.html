@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0,maximum-scale=1,minimum-scale=1,user-scalable=no">
+    <title>小鸟飞翔游戏</title>
+    <style>
+        body {
+            text-align: center;
+        }
+
+        canvas {
+            border: 1px solid #ccc;
+        }
+    </style>
+    <script src="./js/sky.js"></script>
+    <script src="./js/land.js"></script>
+    <script src="./js/pipe.js"></script>
+    <script src="./js/bird.js"></script>
+</head>
+
+<body>
+    <canvas width="800" height="600"></canvas>
+    <script>
+        var c = document.querySelector("canvas");
+        var ctx = c.getContext("2d");
+
+        var gameStartTime = new Date();
+        var gameOverTime = 0;
+
+        /*加载所有图片的函数封装*/
+        function loadImg(imgArr, callback) {
+            // 计数，当count等于imgArr的数组的长度的时候，表示所有图片都加载完成，count++循环每次加载一张图片，直到加载完成
+            var count = 0;
+            // 数组的方式"存键值"的方式只能是[]的方式，取值的方式也是键值对[]的方式取值
+            var imgList = [];
+            for (var i = 0; i < imgArr.length; i++) {
+                var img = new Image();
+                img.src = "./images/" + imgArr[i] + ".png";
+                // 储存new出来的img的图片的名字对应相应的new出来的对象内容
+                imgList[imgArr[i]] = img;
+                img.onload = function () {
+                    count++;
+                    if (count == imgArr.length) {
+                        // 该回调函数是用来加载所有的图片后然后进行运算的操作，因为函数内需要使用imgList参数，所以需要将相应的imgList作为形参传入回调函数中
+                        callback(imgList);
+                    }
+                }
+            }
+        }
+
+        var flag = false;
+        // 加载图片，执行函数
+        loadImg(["birds", "land", "sky", "pipe1", "pipe2"], function (imgList) {
+            var birdImg = imgList["birds"];
+            var landImg = imgList["land"];
+            var skyImg = imgList["sky"];
+            var bottomImg = imgList["pipe1"];
+            var topImg = imgList["pipe2"];
+
+            {
+                // 绘制天空
+                var sky1 = new Sky({
+                    ctx: ctx,
+                    skyImg: skyImg,
+                    x: 0,
+                    y: 0
+                })
+                var sky2 = new Sky({
+                    ctx: ctx,
+                    skyImg: skyImg,
+                    x: c.width,
+                    y: 0
+                })
+
+                // 绘制陆地
+                var landArr = [];
+                for (var i = 0; i < 4; i++) {
+                    var land = new Land({
+                        ctx: ctx,
+                        landImg: landImg,
+                        x: landImg.width * i,
+                        y: c.height - landImg.height
+                    })
+                    landArr.push(land);
+                }
+
+                // 绘制管道
+                var pipeArr = [];
+                for (var i = 0; i < 6; i++) {
+                    var pipe = new Pipe({
+                        ctx: ctx,
+                        topImg: topImg,
+                        bottomImg: bottomImg,
+                        // 为了避免每个管道直接相连，设定每个管道之间的宽度为管道的宽度的2倍，但是距离靠最左边的位移量为3倍
+                        pipeX: 300 + 3 * topImg.width * i
+                    })
+                    pipeArr.push(pipe);
+                }
+
+                // 绘制小鸟
+                var bird = new Bird({
+                    ctx: ctx,
+                    birdImg: birdImg,
+                    canvasX: 100,
+                    canvasY: 100
+                });
+            }
+
+            // 编辑运动的函数
+            function fly() {
+
+                ctx.beginPath();
+                // 绘制天空背景
+                // 如果只绘制一个天空的时候，会出现bug，天空最后的一部分会拉伸出来然后隔一个背景图的位置会重新出现一个天空，所以需要至少绘制两个天空的背景
+                sky1.drawSky();
+                sky2.drawSky();
+
+                // 绘制管道
+                for (var j = 0; j < pipeArr.length; j++) {
+                    pipeArr[j].drawPipe();
+                }
+
+                // 绘制陆地
+                for (var i = 0; i < landArr.length; i++) {
+                    landArr[i].drawLand();
+                }
+
+                // 绘制小鸟
+                bird.drawBird();
+
+                // 绘制文本
+                gameOverTime = new Date();
+                var durationTime = gameOverTime - gameStartTime;
+                durationTime = durationTime / 1000;
+                var hour = Math.floor(durationTime / 3600);
+                var minute = Math.floor(durationTime % 60 / 60);
+                var seconds = Math.floor(durationTime % 60);
+                var ms = parseInt(durationTime * 1000 % 1000);
+                var str = "通关时间：" + hour + "时" + minute + "分" + seconds + "秒" + ms + "毫秒";
+                ctx.textBaseline = "top";
+                ctx.font = "25px 黑体";
+                ctx.fillStyle = "red";
+                ctx.fillText(str, 200, 10);
+
+                // 当小鸟撞到天空顶部和地上时，结束游戏
+                if (bird.canvasY < 0 || bird.canvasY > (c.height - landImg.height - birdImg.height)) {
+                    return;
+                }
+                //当小鸟撞到管道时，结束游戏
+                // console.log(bird.canvasY);
+                if (ctx.isPointInPath(bird.canvasX + bird.birdW / 2, bird.canvasY + bird.birdH / 2)) {
+                    return;
+                }
+
+                // 使用 "类似递归的方式" 进行自动获取电脑帧数的运动，当电脑进入后台时会自动停止动画;所以必须是在函数中使用，传入的参数也是当前使用的函数
+                if (flag) {
+                    window.requestAnimationFrame(fly);
+                }
+            }
+            fly();
+
+            ctx.fillText("开始游戏", 400, 300);
+            // 点击后小鸟往上飞
+            c.onclick = function () {
+                if (flag == false) {
+                    flag = true;
+                    bird.endY = new Date();
+                    fly();
+                } else {
+                    bird.birdSpeed = -0.28;
+                }
+            }
+
+        })
+    </script>
+</body>
+
+</html>
